@@ -72,6 +72,9 @@ export const Laptop3DShowcase: React.FC<Laptop3DShowcaseProps> = ({
 
     const width = mount.clientWidth || 460;
     const height = mount.clientHeight || 400;
+    const isMobile =
+      window.innerWidth < 768 ||
+      window.matchMedia('(pointer: coarse)').matches;
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 100);
@@ -81,9 +84,9 @@ export const Laptop3DShowcase: React.FC<Laptop3DShowcaseProps> = ({
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({
-        antialias: !isSoftwareGl,
+        antialias: !isSoftwareGl && !isMobile,
         alpha: true,
-        powerPreference: 'high-performance',
+        powerPreference: isMobile ? 'default' : 'high-performance',
       });
     } catch {
       return;
@@ -92,7 +95,9 @@ export const Laptop3DShowcase: React.FC<Laptop3DShowcaseProps> = ({
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.15;
     renderer.setPixelRatio(
-      isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2)
+      isSoftwareGl
+        ? 1
+        : Math.min(window.devicePixelRatio || 1, isMobile ? 1.25 : 1.75)
     );
     renderer.setSize(width, height);
     mount.appendChild(renderer.domElement);
@@ -400,6 +405,41 @@ export const Laptop3DShowcase: React.FC<Laptop3DShowcaseProps> = ({
     const clock = new THREE.Clock();
     let frameId = 0;
     let disposed = false;
+    let inViewport = true;
+    let tabVisible = !document.hidden;
+    let isRunning = false;
+
+    const pauseLoop = () => {
+      isRunning = false;
+      cancelAnimationFrame(frameId);
+      clearTimeout(frameId);
+    };
+
+    const resumeLoop = () => {
+      if (disposed || isRunning || !inViewport || !tabVisible) return;
+      isRunning = true;
+      clock.getDelta();
+      tick();
+    };
+
+    const intersectionObserver = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        inViewport = entry.isIntersecting;
+        if (inViewport) resumeLoop();
+        else pauseLoop();
+      },
+      { threshold: 0.02 }
+    );
+    intersectionObserver.observe(mount);
+
+    const onVisibilityChange = () => {
+      tabVisible = !document.hidden;
+      if (tabVisible) resumeLoop();
+      else pauseLoop();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     function afterDraw(cb: () => void) {
       const gl = renderer.getContext() as WebGL2RenderingContext;
@@ -419,7 +459,11 @@ export const Laptop3DShowcase: React.FC<Laptop3DShowcaseProps> = ({
     }
 
     function tick() {
-      if (disposed) return;
+      if (disposed || !inViewport || !tabVisible) {
+        isRunning = false;
+        return;
+      }
+      isRunning = true;
       const delta = Math.min(clock.getDelta(), 0.1);
       const elapsed = clock.getElapsedTime();
       const { rotationSpeed: speed, floatIntensity: floatAmt } =
@@ -466,12 +510,13 @@ export const Laptop3DShowcase: React.FC<Laptop3DShowcaseProps> = ({
       else frameId = requestAnimationFrame(tick);
     }
 
-    tick();
+    resumeLoop();
 
     return () => {
       disposed = true;
-      cancelAnimationFrame(frameId);
-      clearTimeout(frameId);
+      pauseLoop();
+      intersectionObserver.disconnect();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       mount.removeEventListener('pointermove', onPointerMove);
       mount.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointerup', onPointerUp);
@@ -517,10 +562,10 @@ export const Laptop3DShowcase: React.FC<Laptop3DShowcaseProps> = ({
   }, []);
 
   return (
-    <div className="relative w-full h-[340px] sm:h-[380px] select-none cursor-grab active:cursor-grabbing">
+    <div className="relative w-full h-[320px] sm:h-[380px] select-none cursor-grab active:cursor-grabbing touch-pan-y">
       <div
         ref={mountRef}
-        className="w-full h-full"
+        className="w-full h-full touch-pan-y"
         aria-label="Interactive 3D Laptop Showcase"
       />
     </div>

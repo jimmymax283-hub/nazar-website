@@ -15,6 +15,11 @@
     background-color: #050311;
     color: #f8fafc;
     scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  a, button, [role="button"] {
+    touch-action: manipulation;
   }
 
   h1, h2, h3, h4, .font-display {

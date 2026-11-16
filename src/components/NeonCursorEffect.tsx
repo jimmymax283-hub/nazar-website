@@ -73,8 +73,10 @@ export const NeonCursorEffect: React.FC<NeonCursorEffectProps> = ({
     };
 
     const tick = () => {
-      ringX += (targetX - ringX) * 0.18;
-      ringY += (targetY - ringY) * 0.18;
+      const dx = targetX - ringX;
+      const dy = targetY - ringY;
+      ringX += dx * 0.22;
+      ringY += dy * 0.22;
 
       const opacity = visible ? 1 : 0;
       const ringScale = pressed ? 0.8 : interactive ? 1.48 : 1;
@@ -86,21 +88,49 @@ export const NeonCursorEffect: React.FC<NeonCursorEffectProps> = ({
       dot.style.opacity = String(opacity);
       dot.style.transform = `translate3d(${targetX - 4}px, ${targetY - 4}px, 0) scale(${dotScale})`;
 
-      rafId = requestAnimationFrame(tick);
+      if (visible && (Math.abs(dx) > 0.15 || Math.abs(dy) > 0.15)) {
+        rafId = requestAnimationFrame(tick);
+      } else {
+        ringX = targetX;
+        ringY = targetY;
+        rafId = 0;
+      }
     };
 
-    window.addEventListener('pointermove', onPointerMove, { passive: true });
-    window.addEventListener('pointerdown', onPointerDown, { passive: true });
-    window.addEventListener('pointerup', onPointerUp, { passive: true });
-    document.addEventListener('mouseleave', onPointerLeave);
-    rafId = requestAnimationFrame(tick);
+    const wake = () => {
+      if (!rafId) {
+        rafId = requestAnimationFrame(tick);
+      }
+    };
+
+    const onPointerMoveWake = (e: PointerEvent) => {
+      onPointerMove(e);
+      wake();
+    };
+    const onPointerDownWake = () => {
+      onPointerDown();
+      wake();
+    };
+    const onPointerUpWake = () => {
+      onPointerUp();
+      wake();
+    };
+    const onPointerLeaveWake = () => {
+      onPointerLeave();
+      wake();
+    };
+
+    window.addEventListener('pointermove', onPointerMoveWake, { passive: true });
+    window.addEventListener('pointerdown', onPointerDownWake, { passive: true });
+    window.addEventListener('pointerup', onPointerUpWake, { passive: true });
+    document.addEventListener('mouseleave', onPointerLeaveWake);
 
     return () => {
       cancelAnimationFrame(rafId);
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('pointerup', onPointerUp);
-      document.removeEventListener('mouseleave', onPointerLeave);
+      window.removeEventListener('pointermove', onPointerMoveWake);
+      window.removeEventListener('pointerdown', onPointerDownWake);
+      window.removeEventListener('pointerup', onPointerUpWake);
+      document.removeEventListener('mouseleave', onPointerLeaveWake);
     };
   }, [enabled]);
 

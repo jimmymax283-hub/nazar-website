@@ -276,17 +276,41 @@ const MapContent: React.FC<AgencyLocationMapProps> = ({
 };
 
 export const AgencyLocationMap: React.FC<AgencyLocationMapProps> = (props) => {
+  const { studioMap } = props.config.contact;
+  const directionsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    `${studioMap.lat},${studioMap.lng}`
+  )}`;
+
   if (!MAPS_API_KEY) {
     return (
-      <div className="glass-panel rounded-2xl p-6 text-center space-y-2">
-        <MapPin className="w-6 h-6 text-violet-400 mx-auto" />
-        <p className="text-sm font-semibold text-white">
-          Google Maps Studio Location
-        </p>
-        <p className="text-xs text-slate-400">
-          {props.config.contact.studioMap.studioLabel} ·{' '}
-          {props.config.contact.location}
-        </p>
+      <div className="glass-panel rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-5 text-center sm:text-left">
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-violet-600/25 border border-violet-400/35 flex items-center justify-center shrink-0">
+            <MapPin className="w-6 h-6 text-violet-300" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-base font-display font-semibold text-white">
+              {studioMap.studioLabel}
+            </p>
+            <p className="text-xs sm:text-sm text-slate-300">
+              {props.config.contact.location} · {props.config.contact.phone}
+            </p>
+            <p className="text-xs text-slate-400">
+              {props.config.contact.email}
+            </p>
+          </div>
+        </div>
+
+        <a
+          href={directionsHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="neon-cta-btn inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-semibold text-white whitespace-nowrap shrink-0"
+        >
+          <Navigation className="w-3.5 h-3.5" />
+          <span>Open in Google Maps</span>
+          <ExternalLink className="w-3 h-3" />
+        </a>
       </div>
     );
   }

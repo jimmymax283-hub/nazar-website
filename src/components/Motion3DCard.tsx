@@ -34,7 +34,7 @@ export const Motion3DCard: React.FC<Motion3DCardProps> = ({
   const rotateY = useTransform(smoothX, [-0.5, 0.5], [-10, 10]);
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!enabled || !ref.current) return;
+    if (!enabled || e.pointerType === 'touch' || !ref.current) return;
     const rect = ref.current.getBoundingClientRect();
     const nx = (e.clientX - rect.left) / rect.width - 0.5;
     const ny = (e.clientY - rect.top) / rect.height - 0.5;

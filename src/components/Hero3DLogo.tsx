@@ -76,6 +76,9 @@ export const Hero3DLogo: React.FC<Hero3DLogoProps> = ({
 
     const width = mount.clientWidth || 520;
     const height = mount.clientHeight || 480;
+    const isMobile =
+      window.innerWidth < 768 ||
+      window.matchMedia('(pointer: coarse)').matches;
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
@@ -84,9 +87,9 @@ export const Hero3DLogo: React.FC<Hero3DLogoProps> = ({
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({
-        antialias: !isSoftwareGl,
+        antialias: !isSoftwareGl && !isMobile,
         alpha: true,
-        powerPreference: 'high-performance',
+        powerPreference: isMobile ? 'default' : 'high-performance',
       });
     } catch {
       return;
@@ -95,10 +98,12 @@ export const Hero3DLogo: React.FC<Hero3DLogoProps> = ({
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.15;
     renderer.setPixelRatio(
-      isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2)
+      isSoftwareGl
+        ? 1
+        : Math.min(window.devicePixelRatio || 1, isMobile ? 1.25 : 1.75)
     );
     renderer.setSize(width, height);
-    renderer.shadowMap.enabled = !isSoftwareGl;
+    renderer.shadowMap.enabled = !isSoftwareGl && !isMobile;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     mount.appendChild(renderer.domElement);
 
@@ -145,7 +150,8 @@ export const Hero3DLogo: React.FC<Hero3DLogoProps> = ({
     scene.add(heroGroup);
 
     // 1. Core Obsidian Sphere with Dual-Sided Emblem Texture
-    const sphereGeo = new THREE.SphereGeometry(1.18, 64, 64);
+    const sphereSegs = isMobile ? 36 : 64;
+    const sphereGeo = new THREE.SphereGeometry(1.18, sphereSegs, sphereSegs);
     const emblemTex = createEmblemTexture(
       configRef.current.monogram,
       configRef.current.primaryBlue,
@@ -164,15 +170,16 @@ export const Hero3DLogo: React.FC<Hero3DLogoProps> = ({
     const coreSphere = new THREE.Mesh(sphereGeo, coreMat);
     heroGroup.add(coreSphere);
 
-    // 2. Outer Glossy Glass Shell
-    const glassGeo = new THREE.SphereGeometry(1.24, 48, 48);
+    // 2. Outer Glossy Glass Shell (avoid costly multi-pass transmission on mobile/softwareGL)
+    const glassSegs = isMobile ? 28 : 48;
+    const glassGeo = new THREE.SphereGeometry(1.24, glassSegs, glassSegs);
     const glassMat = new THREE.MeshPhysicalMaterial({
       color: 0xc4b5fd,
       roughness: 0.06,
       metalness: 0.05,
-      transmission: isSoftwareGl ? 0 : 0.72,
+      transmission: isSoftwareGl || isMobile ? 0 : 0.72,
       transparent: true,
-      opacity: isSoftwareGl ? 0.18 : 0.35,
+      opacity: isSoftwareGl || isMobile ? 0.22 : 0.35,
       ior: 1.5,
       clearcoat: 1.0,
       depthWrite: false,
@@ -409,6 +416,41 @@ export const Hero3DLogo: React.FC<Hero3DLogoProps> = ({
     const clock = new THREE.Clock();
     let frameId = 0;
     let disposed = false;
+    let inViewport = true;
+    let tabVisible = !document.hidden;
+    let isRunning = false;
+
+    const pauseLoop = () => {
+      isRunning = false;
+      cancelAnimationFrame(frameId);
+      clearTimeout(frameId);
+    };
+
+    const resumeLoop = () => {
+      if (disposed || isRunning || !inViewport || !tabVisible) return;
+      isRunning = true;
+      clock.getDelta();
+      tick();
+    };
+
+    const intersectionObserver = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        inViewport = entry.isIntersecting;
+        if (inViewport) resumeLoop();
+        else pauseLoop();
+      },
+      { threshold: 0.02 }
+    );
+    intersectionObserver.observe(mount);
+
+    const onVisibilityChange = () => {
+      tabVisible = !document.hidden;
+      if (tabVisible) resumeLoop();
+      else pauseLoop();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     function afterDraw(cb: () => void) {
       const gl = renderer.getContext() as WebGL2RenderingContext;
@@ -428,7 +470,11 @@ export const Hero3DLogo: React.FC<Hero3DLogoProps> = ({
     }
 
     function tick() {
-      if (disposed) return;
+      if (disposed || !inViewport || !tabVisible) {
+        isRunning = false;
+        return;
+      }
+      isRunning = true;
       const delta = Math.min(clock.getDelta(), 0.1);
       const elapsed = clock.getElapsedTime();
       const { rotationSpeed: speed, full3DSpin: spin360, floatIntensity: floatAmt } =
@@ -497,12 +543,13 @@ export const Hero3DLogo: React.FC<Hero3DLogoProps> = ({
       else frameId = requestAnimationFrame(tick);
     }
 
-    tick();
+    resumeLoop();
 
     return () => {
       disposed = true;
-      cancelAnimationFrame(frameId);
-      clearTimeout(frameId);
+      pauseLoop();
+      intersectionObserver.disconnect();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       mount.removeEventListener('pointermove', onPointerMove);
       mount.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointerup', onPointerUp);
@@ -541,10 +588,10 @@ export const Hero3DLogo: React.FC<Hero3DLogoProps> = ({
   }, []);
 
   return (
-    <div className="relative w-full h-[380px] sm:h-[440px] lg:h-[500px] select-none cursor-grab active:cursor-grabbing">
+    <div className="relative w-full h-[360px] sm:h-[440px] lg:h-[500px] select-none cursor-grab active:cursor-grabbing touch-pan-y">
       <div
         ref={containerRef}
-        className="w-full h-full"
+        className="w-full h-full touch-pan-y"
         aria-label="Interactive 3D rotating NJ brand emblem"
       />
     </div>

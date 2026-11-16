@@ -20,10 +20,11 @@ import {
   X,
 } from 'lucide-react';
 import { compressImageFileToDataUrl } from './utils/imageUpload';
-import { DEFAULT_SITE_CONFIG } from './data/defaultSiteConfig';
+import { DEFAULT_SITE_CONFIG } from './config/defaultSiteConfig';
 import {
   EditorSectionKey,
   PageSectionId,
+  SectionLayoutItem,
   ServiceItem,
   SiteConfig,
   SocialPlatform,
@@ -50,11 +51,6 @@ import {
 import { Motion3DCard } from './components/Motion3DCard';
 import { InlineEditableText } from './components/InlineEditableText';
 
-const AgencyLocationMap = lazy(() =>
-  import('./components/AgencyLocationMap').then((m) => ({
-    default: m.AgencyLocationMap,
-  }))
-);
 const Laptop3DShowcase = lazy(() =>
   import('./components/Laptop3DShowcase').then((m) => ({
     default: m.Laptop3DShowcase,
@@ -106,25 +102,26 @@ function mergeSiteConfig(raw: unknown): SiteConfig {
     contact?: Partial<SiteConfig['contact']>;
   };
 
-  const savedSections: { id: PageSectionId; label: string; visible: boolean }[] =
-    Array.isArray(parsed.layout?.sections) ? parsed.layout.sections : [];
-  const existingIds = new Set(savedSections.map((s) => s.id));
+  const savedSections: SectionLayoutItem[] =
+    Array.isArray(parsed.layout?.sections)
+      ? parsed.layout.sections.filter(
+          (s: SectionLayoutItem) => s.id !== 'location-map'
+        )
+      : [];
+  const existingIds = new Set(savedSections.map((s: SectionLayoutItem) => s.id));
   const frontDefaults = DEFAULT_SITE_CONFIG.layout.sections.filter(
-    (s) =>
+    (s: SectionLayoutItem) =>
       (s.id === 'front-portrait' || s.id === 'hero') &&
       !existingIds.has(s.id)
   );
-  const trailingDefaults = DEFAULT_SITE_CONFIG.layout.sections.filter(
-    (s) => s.id === 'location-map' && !existingIds.has(s.id)
-  );
   const mergedSections =
     savedSections.length > 0
-      ? [...frontDefaults, ...savedSections, ...trailingDefaults]
+      ? [...frontDefaults, ...savedSections]
       : DEFAULT_SITE_CONFIG.layout.sections;
 
   const videoEditingDefault =
     DEFAULT_SITE_CONFIG.services.items.find(
-      (item) => item.id === 'srv-video-editing'
+      (item: ServiceItem) => item.id === 'srv-video-editing'
     ) ?? DEFAULT_SITE_CONFIG.services.items[4];
 
   const savedServicesItems: ServiceItem[] = Array.isArray(parsed.services?.items)
@@ -183,6 +180,11 @@ function mergeSiteConfig(raw: unknown): SiteConfig {
       studioMap: {
         ...DEFAULT_SITE_CONFIG.contact.studioMap,
         ...parsed.contact?.studioMap,
+        subtitle:
+          !parsed.contact?.studioMap?.subtitle ||
+          parsed.contact.studioMap.subtitle.includes('Edit Mode')
+            ? DEFAULT_SITE_CONFIG.contact.studioMap.subtitle
+            : parsed.contact.studioMap.subtitle,
       },
     },
     layout: { sections: mergedSections },
@@ -299,14 +301,6 @@ export default function App() {
     }, 600);
     return () => window.clearTimeout(timer);
   }, [config]);
-
-  const [mapsQuotaExceeded, setMapsQuotaExceeded] = useState(false);
-  useEffect(() => {
-    const onQuotaExceeded = () => setMapsQuotaExceeded(true);
-    window.addEventListener('gmp-quota-exceeded', onQuotaExceeded);
-    return () =>
-      window.removeEventListener('gmp-quota-exceeded', onQuotaExceeded);
-  }, []);
 
   useEffect(() => {
     const canonicalUrl = `${window.location.origin}${window.location.pathname}`;
@@ -1731,61 +1725,7 @@ export default function App() {
         );
 
       case 'location-map':
-        return (
-          <motion.section
-            key="location-map"
-            id="studio-location"
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={SECTION_VIEWPORT}
-            transition={{ duration: 0.55, ease: SECTION_EASE }}
-            className="py-12 lg:py-16"
-          >
-            <div className="max-w-7xl mx-auto px-6 space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2.5 text-xs sm:text-sm font-medium text-slate-300">
-                      <span className="h-px w-6 bg-violet-400/60" />
-                      <span>Studio Location</span>
-                    </div>
-                    <EditBadge section="contact" label="Map Pin" />
-                  </div>
-                  <h2 className="font-display text-2xl sm:text-3xl font-bold text-white text-balance">
-                    <InlineEditableText
-                      value={config.contact.studioMap.heading}
-                      editMode={editMode}
-                      onChange={(v) =>
-                        setConfig((c) => ({
-                          ...c,
-                          contact: {
-                            ...c.contact,
-                            studioMap: { ...c.contact.studioMap, heading: v },
-                          },
-                        }))
-                      }
-                    />
-                  </h2>
-                  <p className="text-xs sm:text-sm text-slate-300/85">
-                    {config.contact.studioMap.subtitle}
-                  </p>
-                </div>
-              </div>
-
-              <Suspense
-                fallback={
-                  <div className="w-full h-[340px] sm:h-[400px] rounded-2xl bg-white/[0.02] border border-white/10" />
-                }
-              >
-                <AgencyLocationMap
-                  config={config}
-                  editMode={editMode}
-                  onChange={setConfig}
-                />
-              </Suspense>
-            </div>
-          </motion.section>
-        );
+        return null;
     }
   };
 
@@ -1795,46 +1735,36 @@ export default function App() {
         id="top"
         className="relative min-h-screen bg-[#050311] text-slate-100 overflow-x-clip"
       >
-        {/* Ambient Neon Blue + Purple Atmospheric Backlights */}
+        {/* Ambient Neon Blue + Purple Atmospheric Backlights (GPU-friendly radial gradients) */}
         <div
-          className="pointer-events-none fixed inset-0 z-0"
+          className="pointer-events-none fixed inset-0 z-0 transform-gpu"
           style={{ opacity: Math.min(1, config.theme.glowIntensity * 0.75) }}
         >
           <div
-            className="absolute -top-32 left-1/4 w-[620px] h-[520px] rounded-full blur-[140px]"
-            style={{ background: `${config.theme.primaryBlue}24` }}
+            className="absolute -top-40 left-[12%] w-[780px] h-[680px] rounded-full"
+            style={{
+              background: `radial-gradient(circle, ${config.theme.primaryBlue}26 0%, transparent 68%)`,
+            }}
           />
           <div
-            className="absolute top-16 right-0 w-[680px] h-[560px] rounded-full blur-[150px]"
-            style={{ background: `${config.theme.primaryPurple}2c` }}
+            className="absolute top-0 -right-24 w-[840px] h-[720px] rounded-full"
+            style={{
+              background: `radial-gradient(circle, ${config.theme.primaryPurple}2e 0%, transparent 68%)`,
+            }}
           />
           <div
-            className="absolute top-[48%] -left-24 w-[520px] h-[520px] rounded-full blur-[150px]"
-            style={{ background: `${config.theme.primaryBlue}1f` }}
+            className="absolute top-[42%] -left-40 w-[700px] h-[700px] rounded-full"
+            style={{
+              background: `radial-gradient(circle, ${config.theme.primaryBlue}20 0%, transparent 68%)`,
+            }}
           />
           <div
-            className="absolute bottom-0 right-1/4 w-[620px] h-[420px] rounded-full blur-[150px]"
-            style={{ background: `${config.theme.primaryPurple}24` }}
+            className="absolute -bottom-24 right-[15%] w-[780px] h-[580px] rounded-full"
+            style={{
+              background: `radial-gradient(circle, ${config.theme.primaryPurple}26 0%, transparent 68%)`,
+            }}
           />
         </div>
-
-        {/* Google Maps Platform Case A Demo Quota Banner */}
-        {mapsQuotaExceeded && (
-          <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2.5 text-xs md:text-sm text-center sticky top-0 z-50 shadow-sm">
-            <span>
-              Google Maps Platform quota reached. If you are the app owner, visit{' '}
-              <a
-                href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline font-semibold text-amber-950 hover:text-amber-800"
-              >
-                maps developer site
-              </a>{' '}
-              for instructions to update your account.
-            </span>
-          </div>
-        )}
 
         {/* Hidden Global Photo Uploader Inputs */}
         <input

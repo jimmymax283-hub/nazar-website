@@ -76,9 +76,10 @@ export const InteractiveParticleField: React.FC<
 
     let width = host.clientWidth || 1200;
     let height = host.clientHeight || 560;
-    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    const activeCount = width < 640 ? Math.min(count, 24) : count;
 
-    const particles: Particle[] = Array.from({ length: count }, (_, i) => {
+    const particles: Particle[] = Array.from({ length: activeCount }, (_, i) => {
       const tone: Particle['tone'] =
         i % 5 === 0 ? 'white' : i % 2 === 0 ? 'blue' : 'purple';
       return {
@@ -96,12 +97,38 @@ export const InteractiveParticleField: React.FC<
       };
     });
 
+    const createGlowSprite = (r: number, g: number, b: number) => {
+      const size = 64;
+      const sprite = document.createElement('canvas');
+      sprite.width = size;
+      sprite.height = size;
+      const sctx = sprite.getContext('2d');
+      if (sctx) {
+        const half = size / 2;
+        const grad = sctx.createRadialGradient(half, half, 0, half, half, half);
+        grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 1)`);
+        grad.addColorStop(0.28, `rgba(${r}, ${g}, ${b}, 0.55)`);
+        grad.addColorStop(0.58, `rgba(${r}, ${g}, ${b}, 0.16)`);
+        grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+        sctx.fillStyle = grad;
+        sctx.fillRect(0, 0, size, size);
+      }
+      return sprite;
+    };
+
+    let cachedBlueHex = propsRef.current.primaryBlue;
+    let cachedPurpleHex = propsRef.current.primaryPurple;
+    let [br, bg, bb] = hexToRgb(cachedBlueHex);
+    let [pr, pg, pb] = hexToRgb(cachedPurpleHex);
+    let blueSprite = createGlowSprite(br, bg, bb);
+    let purpleSprite = createGlowSprite(pr, pg, pb);
+    const whiteSprite = createGlowSprite(226, 232, 255);
+
     const resizeCanvas = () => {
       const nextW = host.clientWidth || 1200;
       const nextH = host.clientHeight || 560;
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      dpr = Math.min(window.devicePixelRatio || 1, 1.5);
 
-      // Rescale existing particle coordinates proportionally so there is no pop
       if (width > 0 && height > 0) {
         const sx = nextW / width;
         const sy = nextH / height;
@@ -131,11 +158,12 @@ export const InteractiveParticleField: React.FC<
     };
 
     const onPointerMove = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') return;
       const rect = host.getBoundingClientRect();
       pointer.x = e.clientX - rect.left;
       pointer.y = e.clientY - rect.top;
-      pointer.targetNormX = ((pointer.x / Math.max(1, rect.width)) - 0.5) * 2;
-      pointer.targetNormY = ((pointer.y / Math.max(1, rect.height)) - 0.5) * 2;
+      pointer.targetNormX = (pointer.x / Math.max(1, rect.width) - 0.5) * 2;
+      pointer.targetNormY = (pointer.y / Math.max(1, rect.height) - 0.5) * 2;
       pointer.active = true;
     };
 
@@ -152,6 +180,7 @@ export const InteractiveParticleField: React.FC<
     resizeObserver.observe(host);
 
     let isVisible = true;
+    let tabVisible = !document.hidden;
     let rafId = 0;
     let lastTime = performance.now();
 
@@ -167,12 +196,19 @@ export const InteractiveParticleField: React.FC<
         floatIntensity: floatAmt,
       } = propsRef.current;
 
-      const [br, bg, bb] = hexToRgb(blueHex);
-      const [pr, pg, pb] = hexToRgb(purpleHex);
+      if (blueHex !== cachedBlueHex) {
+        cachedBlueHex = blueHex;
+        [br, bg, bb] = hexToRgb(blueHex);
+        blueSprite = createGlowSprite(br, bg, bb);
+      }
+      if (purpleHex !== cachedPurpleHex) {
+        cachedPurpleHex = purpleHex;
+        [pr, pg, pb] = hexToRgb(purpleHex);
+        purpleSprite = createGlowSprite(pr, pg, pb);
+      }
 
       ctx.clearRect(0, 0, width, height);
 
-      // Smooth pointer parallax easing
       pointer.normX += (pointer.targetNormX - pointer.normX) * 0.08 * dt;
       pointer.normY += (pointer.targetNormY - pointer.normY) * 0.08 * dt;
 
@@ -192,7 +228,6 @@ export const InteractiveParticleField: React.FC<
           else if (p.y > height + 20) p.y = -20;
         }
 
-        // 3D depth parallax offset + gentle pointer repulsion
         const parallaxX = pointer.normX * 18 * p.depth;
         const parallaxY = pointer.normY * 14 * p.depth;
 
@@ -218,54 +253,48 @@ export const InteractiveParticleField: React.FC<
 
         const drawX = p.x + p.ox;
         const drawY = p.y + p.oy;
-        const twinkle =
-          0.78 + Math.sin(elapsed * 1.4 + p.phase) * 0.22;
+        const twinkle = 0.78 + Math.sin(elapsed * 1.4 + p.phase) * 0.22;
         const finalAlpha = Math.min(
           0.92,
           (p.alpha * twinkle + proxBoost) * Math.min(1.25, 0.55 + glowAmt * 0.55)
         );
 
+        let sprite = whiteSprite;
         let r = 226;
         let g = 232;
         let b = 255;
         if (p.tone === 'blue') {
+          sprite = blueSprite;
           r = br;
           g = bg;
           b = bb;
         } else if (p.tone === 'purple') {
+          sprite = purpleSprite;
           r = pr;
           g = pg;
           b = pb;
         }
 
-        // Subtle outer glow halo
         const haloRadius = p.radius * (3.2 + proxBoost * 3.0);
-        const grad = ctx.createRadialGradient(
-          drawX,
-          drawY,
-          0,
-          drawX,
-          drawY,
-          haloRadius
+        ctx.globalAlpha = finalAlpha;
+        ctx.drawImage(
+          sprite,
+          drawX - haloRadius,
+          drawY - haloRadius,
+          haloRadius * 2,
+          haloRadius * 2
         );
-        grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${finalAlpha})`);
-        grad.addColorStop(0.4, `rgba(${r}, ${g}, ${b}, ${finalAlpha * 0.32})`);
-        grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
-
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(drawX, drawY, haloRadius, 0, Math.PI * 2);
-        ctx.fill();
 
         // Crisp glowing core dot
-        ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.95, finalAlpha * 0.9)})`;
+        ctx.globalAlpha = Math.min(0.95, finalAlpha * 0.9);
+        ctx.fillStyle = '#ffffff';
         ctx.beginPath();
         ctx.arc(drawX, drawY, p.radius * (0.62 + proxBoost * 0.35), 0, Math.PI * 2);
         ctx.fill();
 
-        // Subtle filament link to cursor when very close
         if (proxBoost > 0.12) {
-          ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${proxBoost * 0.42})`;
+          ctx.globalAlpha = proxBoost * 0.42;
+          ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`;
           ctx.lineWidth = 0.85;
           ctx.beginPath();
           ctx.moveTo(drawX, drawY);
@@ -273,40 +302,57 @@ export const InteractiveParticleField: React.FC<
           ctx.stroke();
         }
       }
+      ctx.globalAlpha = 1;
     };
 
     const tick = (now: number) => {
-      if (!isVisible) return;
+      if (!isVisible || !tabVisible) {
+        rafId = 0;
+        return;
+      }
       drawFrame(now, true);
       rafId = requestAnimationFrame(tick);
+    };
+
+    const syncPlayback = () => {
+      if (isVisible && tabVisible && !prefersReducedMotion) {
+        if (!rafId) {
+          lastTime = performance.now();
+          rafId = requestAnimationFrame(tick);
+        }
+      } else if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
     };
 
     const intersectionObserver = new IntersectionObserver(
       (entries) => {
         const entry = entries[0];
         if (!entry) return;
-        const wasVisible = isVisible;
         isVisible = entry.isIntersecting;
-        if (isVisible && !wasVisible && !prefersReducedMotion) {
-          lastTime = performance.now();
-          rafId = requestAnimationFrame(tick);
-        } else if (!isVisible) {
-          cancelAnimationFrame(rafId);
-        }
+        syncPlayback();
       },
       { threshold: 0.02 }
     );
     intersectionObserver.observe(host);
 
+    const onVisibilityChange = () => {
+      tabVisible = !document.hidden;
+      syncPlayback();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     if (prefersReducedMotion) {
       drawFrame(performance.now(), false);
     } else {
-      rafId = requestAnimationFrame(tick);
+      syncPlayback();
     }
 
     return () => {
       cancelAnimationFrame(rafId);
       intersectionObserver.disconnect();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       resizeObserver.disconnect();
       host.removeEventListener('pointermove', onPointerMove);
       host.removeEventListener('pointerleave', onPointerLeave);

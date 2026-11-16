@@ -265,30 +265,13 @@ export const VisitorChatbot: React.FC<VisitorChatbotProps> = ({
 
       // If hosted statically (e.g. GitHub Pages without Node backend), use built-in knowledge base seamlessly
       if (
-        response.status === 404 ||
-        response.status === 405 ||
-        (response.ok && !contentType.includes('text/event-stream'))
+        !response.ok ||
+        !contentType.includes('text/event-stream')
       ) {
         const staticReply = buildStaticKnowledgeReply(trimmed, config);
         setMessages((prev) =>
           prev.map((m) =>
             m.id === botMsgId ? { ...m, text: staticReply } : m
-          )
-        );
-        return;
-      }
-
-      if (!response.ok) {
-        let errMessage = 'Unable to connect right now. Please try WhatsApp or Contact Me.';
-        try {
-          const data = (await response.json()) as { error?: string };
-          if (data?.error) errMessage = data.error;
-        } catch {
-          // Use default fallback message
-        }
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === botMsgId ? { ...m, text: errMessage, isError: true } : m
           )
         );
         return;
@@ -327,11 +310,10 @@ export const VisitorChatbot: React.FC<VisitorChatbotProps> = ({
             };
 
             if (payload.error) {
+              const staticReply = buildStaticKnowledgeReply(trimmed, config);
               setMessages((prev) =>
                 prev.map((m) =>
-                  m.id === botMsgId
-                    ? { ...m, text: payload.error!, isError: true }
-                    : m
+                  m.id === botMsgId ? { ...m, text: staticReply } : m
                 )
               );
               return;
@@ -352,28 +334,18 @@ export const VisitorChatbot: React.FC<VisitorChatbotProps> = ({
       }
 
       if (!accumulated.trim()) {
+        const staticReply = buildStaticKnowledgeReply(trimmed, config);
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === botMsgId
-              ? {
-                  ...m,
-                  text: "I couldn't catch a response for that. Could you please rephrase your question?",
-                  isError: true,
-                }
-              : m
+            m.id === botMsgId ? { ...m, text: staticReply } : m
           )
         );
       }
     } catch {
+      const staticReply = buildStaticKnowledgeReply(trimmed, config);
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === botMsgId
-            ? {
-                ...m,
-                text: 'Connection interrupted. Please try again or reach out via WhatsApp / Contact Me.',
-                isError: true,
-              }
-            : m
+          m.id === botMsgId ? { ...m, text: staticReply } : m
         )
       );
     } finally {
