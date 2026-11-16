@@ -251,17 +251,19 @@ export const FrontPortraitSection: React.FC<FrontPortraitSectionProps> = ({
                       />
                     </svg>
 
-                    {/* Studio Upload CTA Overlay inside Empty Portrait */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-end pb-14 px-6 text-center pointer-events-none">
-                      <button
-                        type="button"
-                        onClick={onUploadPhoto}
-                        className="pointer-events-auto inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-violet-600/80 border border-white/25 hover:border-violet-300 text-xs font-semibold text-white transition-colors shadow-lg"
-                      >
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>Upload Your Full Photo</span>
-                      </button>
-                    </div>
+                    {/* Studio Upload CTA Overlay inside Empty Portrait (Edit Mode only) */}
+                    {editMode && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-end pb-14 px-6 text-center pointer-events-none">
+                        <button
+                          type="button"
+                          onClick={onUploadPhoto}
+                          className="pointer-events-auto inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-violet-600/80 border border-white/25 hover:border-violet-300 text-xs font-semibold text-white transition-colors shadow-lg"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Upload Your Full Photo</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
