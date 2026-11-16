@@ -139,6 +139,43 @@ function buildSiteContext(config: SiteConfig) {
   };
 }
 
+function buildStaticKnowledgeReply(query: string, config: SiteConfig): string {
+  const q = query.toLowerCase();
+
+  if (q.includes('meta') || q.includes('roas') || q.includes('facebook') || q.includes('instagram ad') || q.includes('cpa')) {
+    return `### How Meta Ads & ROAS Work\nMeta Ads use **CBO / Advantage+** and **Pixel + Conversions API (CAPI)** tracking across a 3-stage funnel:\n- **TOFU (Cold):** Hook viewers in the first 3 seconds with UGC, demos, or bold creative angles.\n- **MOFU (Warm):** Retarget video viewers and social engagers with proof, reviews, and case studies.\n- **BOFU (Hot):** Convert Add-to-Cart and site visitors with strong offers.\n- **ROAS Formula:** \`Revenue ÷ Ad Spend\` (e.g. $4,200 revenue on $1,000 spend = **4.2x ROAS**).\n\nWant ${config.brand.name} to manage your Meta Ads? Call/WhatsApp **${config.contact.phone}** or email **${config.contact.email}**.`;
+  }
+
+  if (q.includes('shopify') || q.includes('store') || q.includes('ecommerce') || q.includes('e-commerce') || q.includes('sales')) {
+    return `### How to Boost Shopify Store Sales\n- **High-Converting Product Pages:** Use crisp full-frame visuals, clear benefit bullets, verified reviews, and a sticky Add-to-Cart button.\n- **Raise AOV (Average Order Value):** Add product bundles, quantity breaks, free-shipping progress bars, and in-cart upsells.\n- **Recover Lost Checkouts:** Simplify mobile checkout and run automated WhatsApp/email abandoned cart reminders.\n\nWe build high-converting Shopify funnels—message **${config.contact.phone}** or click **Book Call / Quote** below.`;
+  }
+
+  if (q.includes('video') || q.includes('edit') || q.includes('reel') || q.includes('tiktok') || q.includes('short')) {
+    return `### Video Editing Tips for Viral Reels & Ads\n- **0–3s Hook:** Start with visual movement + a bold on-screen headline addressing a clear pain point.\n- **Fast Retention Pacing:** Cut dead air every 1.5–3 seconds with zoom punch-ins and B-roll overlays.\n- **Captions & Audio:** Add high-contrast animated captions (many watch muted) plus clean SFX and background music.\n- **A/B Testing:** Keep one strong body and test **3–5 different opening hooks**.\n\nExplore our **Video Editing** service or contact **${config.contact.phone}** for custom edits.`;
+  }
+
+  if (q.includes('funnel') || q.includes('digital marketing') || q.includes('social media') || q.includes('seo')) {
+    return `### Full-Funnel Digital Marketing Blueprint\n- **Top of Funnel (Awareness):** Short-form Reels/TikToks + broad Meta Ads to attract cold prospects.\n- **Middle of Funnel (Trust):** Educational posts, testimonials, and retargeting.\n- **Bottom of Funnel (Conversion):** Optimized landing pages/Shopify checkout + WhatsApp/Email follow-ups.\n- **Tracking:** Monitor **CAC, LTV, CTR, CPA, and Break-Even ROAS** weekly.\n\nWant a custom growth roadmap? Reach **${config.brand.name}** at **${config.contact.phone}** or **${config.contact.email}**.`;
+  }
+
+  if (q.includes('portfolio') || q.includes('result') || q.includes('work') || q.includes('case')) {
+    const items = config.portfolio.projects
+      .map((p) => `- **${p.title}** (${p.client}): **${p.metric}** — ${p.outcome}`)
+      .join('\n');
+    return `### Featured Results & Case Studies\n${items}\n\nClick any card in the **Portfolio** section for full strategy details, or message **${config.contact.phone}**.`;
+  }
+
+  if (q.includes('contact') || q.includes('phone') || q.includes('number') || q.includes('whatsapp') || q.includes('email') || q.includes('gmail') || q.includes('quote') || q.includes('price') || q.includes('book') || q.includes('call')) {
+    return `### Contact ${config.brand.name}\n- **Phone / WhatsApp:** ${config.contact.phone}\n- **Gmail:** ${config.contact.email}\n- **Location:** ${config.contact.location}\n\nPricing depends on your campaign scope and goals—click **Book Call / Quote** or **WhatsApp Direct** below for a tailored plan!`;
+  }
+
+  const servicesList = config.services.items
+    .map((s) => `- **${s.title}** (${s.tagline}): ${s.description}`)
+    .join('\n');
+
+  return `### Services Offered by ${config.brand.name}\n${servicesList}\n\nYou can also ask me about **Meta Ads & ROAS**, **Shopify CRO**, **Video Editing**, **Full-Funnel Strategy**, or contact us at **${config.contact.phone}** / **${config.contact.email}**.`;
+}
+
 export const VisitorChatbot: React.FC<VisitorChatbotProps> = ({
   config,
   onOpenContact,
@@ -223,6 +260,23 @@ export const VisitorChatbot: React.FC<VisitorChatbotProps> = ({
           siteContext: buildSiteContext(config),
         }),
       });
+
+      const contentType = response.headers.get('content-type') || '';
+
+      // If hosted statically (e.g. GitHub Pages without Node backend), use built-in knowledge base seamlessly
+      if (
+        response.status === 404 ||
+        response.status === 405 ||
+        (response.ok && !contentType.includes('text/event-stream'))
+      ) {
+        const staticReply = buildStaticKnowledgeReply(trimmed, config);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === botMsgId ? { ...m, text: staticReply } : m
+          )
+        );
+        return;
+      }
 
       if (!response.ok) {
         let errMessage = 'Unable to connect right now. Please try WhatsApp or Contact Me.';

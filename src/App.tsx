@@ -232,7 +232,8 @@ export default function App() {
     const syncInitialServerConfig = async () => {
       try {
         const res = await fetch('/api/site-config');
-        if (!res.ok) return;
+        const contentType = res.headers.get('content-type') || '';
+        if (!res.ok || !contentType.includes('application/json')) return;
         const data = (await res.json()) as {
           exists?: boolean;
           config?: unknown;
