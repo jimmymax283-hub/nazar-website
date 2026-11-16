@@ -275,6 +275,7 @@ function getReadableErrorInfo(err: unknown): {
 
 const SITE_CONFIG_DIR = path.resolve(__dirname, 'data');
 const SITE_CONFIG_FILE = path.join(SITE_CONFIG_DIR, 'site-config.json');
+const PUBLIC_SITE_CONFIG_FILE = path.resolve(__dirname, 'public', 'site-config.json');
 
 async function startServer() {
   const app = express();
@@ -286,11 +287,16 @@ async function startServer() {
 
   app.get('/api/site-config', (_req, res) => {
     try {
-      if (!fs.existsSync(SITE_CONFIG_FILE)) {
+      const targetFile = fs.existsSync(SITE_CONFIG_FILE)
+        ? SITE_CONFIG_FILE
+        : fs.existsSync(PUBLIC_SITE_CONFIG_FILE)
+          ? PUBLIC_SITE_CONFIG_FILE
+          : null;
+      if (!targetFile) {
         res.json({ exists: false, config: null });
         return;
       }
-      const raw = fs.readFileSync(SITE_CONFIG_FILE, 'utf-8');
+      const raw = fs.readFileSync(targetFile, 'utf-8');
       const parsed = JSON.parse(raw);
       res.json({ exists: true, config: parsed });
     } catch (err) {
@@ -313,8 +319,11 @@ async function startServer() {
       return;
     }
     try {
+      const serialized = JSON.stringify(incoming, null, 2);
       fs.mkdirSync(SITE_CONFIG_DIR, { recursive: true });
-      fs.writeFileSync(SITE_CONFIG_FILE, JSON.stringify(incoming, null, 2), 'utf-8');
+      fs.writeFileSync(SITE_CONFIG_FILE, serialized, 'utf-8');
+      fs.mkdirSync(path.dirname(PUBLIC_SITE_CONFIG_FILE), { recursive: true });
+      fs.writeFileSync(PUBLIC_SITE_CONFIG_FILE, serialized, 'utf-8');
       res.json({ ok: true, savedAt: new Date().toISOString() });
     } catch (err) {
       console.error('Failed to write site-config.json:', err);

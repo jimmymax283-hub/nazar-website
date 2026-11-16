@@ -231,18 +231,48 @@ export default function App() {
     let active = true;
     const syncInitialServerConfig = async () => {
       try {
-        const res = await fetch('/api/site-config');
-        const contentType = res.headers.get('content-type') || '';
-        if (!res.ok || !contentType.includes('application/json')) return;
-        const data = (await res.json()) as {
-          exists?: boolean;
-          config?: unknown;
-        };
+        let loadedConfig: unknown = null;
+        let hasRemote = false;
+
+        try {
+          const res = await fetch('/api/site-config');
+          const contentType = res.headers.get('content-type') || '';
+          if (res.ok && contentType.includes('application/json')) {
+            const data = (await res.json()) as {
+              exists?: boolean;
+              config?: unknown;
+            };
+            if (data.exists && data.config) {
+              loadedConfig = data.config;
+              hasRemote = true;
+            }
+          }
+        } catch {
+          // API route unavailable on static hosts like GitHub Pages
+        }
+
+        // Static hosting fallback (GitHub Pages ./site-config.json)
+        if (!hasRemote) {
+          try {
+            const staticRes = await fetch('./site-config.json');
+            const staticType = staticRes.headers.get('content-type') || '';
+            if (staticRes.ok && staticType.includes('application/json')) {
+              const staticData = (await staticRes.json()) as Record<string, unknown>;
+              if (staticData && staticData.brand && staticData.services) {
+                loadedConfig = staticData;
+                hasRemote = true;
+              }
+            }
+          } catch {
+            // Optional static config absent
+          }
+        }
+
         if (!active) return;
 
-        if (data.exists && data.config) {
+        if (hasRemote && loadedConfig) {
           if (!hasSavedLocalConfigRef.current) {
-            const hydrated = mergeSiteConfig(data.config);
+            const hydrated = mergeSiteConfig(loadedConfig);
             setConfig(hydrated);
             try {
               localStorage.setItem(STORAGE_KEY, JSON.stringify(hydrated));
